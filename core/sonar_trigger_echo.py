@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
    pi = pigpio.pi()
 
-   sonar = sonar_trigger_echo.ranger(pi, 20, 21)
+   sonar = sonar_trigger_echo.ranger(pi, 17, 27)
 
    end = time.time() + 600.0
 
