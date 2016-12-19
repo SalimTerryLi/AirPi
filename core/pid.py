@@ -10,9 +10,9 @@ class PID_Attitude():
 	KdI=50
 	KpO=0.1
 	KiO=0.001
-	KpS=0.1
-	KiS=0
-	KdS=0
+	KpS=4
+	KiS=0.25
+	KdS=40
 
 	errorSumRangeO=30
 	errorSumRangeI=3
@@ -22,6 +22,7 @@ class PID_Attitude():
 	errorSumI=0
 	errorSumS=0
 	errorGyroLast=0
+	lastGyro=0
 	errorAngleLast=0
 
 	def PID_Gyro(self,aimd,current):
@@ -56,16 +57,18 @@ class PID_Attitude():
 	def PID_Single(self,aimd,current,gyro,dt):
 		errorS = aimd - current
 		PID_S_P = self.KpS * errorS
-		self.errorSumS = self.errorSumS + errorS * dt
+		self.errorSumS = self.errorSumS + errorS
 		if self.errorSumS > self.errorSumRangeS :
 			self.errorSumS = self.errorSumRangeS
 		if self.errorSumS < -self.errorSumRangeS :
 			self.errorSumS = -self.errorSumRangeS
 		PID_S_I = self.KiS * self.errorSumS
+		gyrodelta = 0 + ( gyro - self.lastGyro )
+		self.lastGyro = gyro
+		PID_S_D = self.KdS * gyrodelta
 		#angledelta = errorS - self.errorAngleLast
-		angledelta = gyro
-		self.errorAngleLast = errorS
-		PID_S_D = self.KdS * angledelta
+		#self.errorAngleLast = errorS
+		#PID_S_D = self.KdS * angledelta
 		PID_S = PID_S_P + PID_S_I + PID_S_D
 		return PID_S
 
@@ -137,8 +140,8 @@ class FlightCalculator():
 
 	def stop(self):
 		if self.isInited :
-			self.isRunning=False
 			self.setAimdPowerBase(0)
+			self.isRunning=False
 
 	def setAimdRotation(self,pitch,roll):
 		self.aimdRotation[0]=pitch
@@ -213,11 +216,11 @@ class FlightCalculator():
 				time.sleep(0.02 - timecost)
 
 	def setKp(self,value):
-		self.pitchPID.KpS=value
+		#self.pitchPID.KpS=value
 		self.rollPID.KpS=value
 	def setKi(self,value):
-		self.pitchPID.KiS=value
+		#self.pitchPID.KiS=value
 		self.rollPID.KiS=value
 	def setKd(self,value):
-		self.pitchPID.KdS=value
+		#self.pitchPID.KdS=value
 		self.rollPID.KdS=value
