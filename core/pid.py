@@ -10,9 +10,9 @@ class PID_Attitude():
 	KdI=50
 	KpO=0.1
 	KiO=0.001
-	KpS=4
-	KiS=0.25
-	KdS=40
+	KpS=0
+	KiS=0
+	KdS=0
 
 	errorSumRangeO=30
 	errorSumRangeI=3
@@ -56,14 +56,14 @@ class PID_Attitude():
 
 	def PID_Single(self,aimd,current,gyro,dt):
 		errorS = aimd - current
-		PID_S_P = self.KpS * errorS
+		PID_S_P = 1.0 * self.KpS * errorS
 		self.errorSumS = self.errorSumS + errorS
 		if self.errorSumS > self.errorSumRangeS :
 			self.errorSumS = self.errorSumRangeS
 		if self.errorSumS < -self.errorSumRangeS :
 			self.errorSumS = -self.errorSumRangeS
 		PID_S_I = self.KiS * self.errorSumS
-		gyrodelta = 0 + ( gyro - self.lastGyro )
+		gyrodelta = 0 - ( gyro - self.lastGyro )
 		self.lastGyro = gyro
 		PID_S_D = self.KdS * gyrodelta
 		#angledelta = errorS - self.errorAngleLast
@@ -97,6 +97,7 @@ class FlightCalculator():
 	isSonarEnabled=False
 	isPressureEnabled=False
 	isAimdYawEnabled=False
+	isProtected=True
 
 	aimdRotation=[0,0,0]#[Pitch,Roll,Yaw]
 	aimdPosition=[0,0,0]
@@ -214,6 +215,9 @@ class FlightCalculator():
 				print("Tick Too Slowly!")
 			else :
 				time.sleep(0.02 - timecost)
+			
+			if (abs(self.sensor.getRotation()[0])>50) or (abs(self.sensor.getRotation()[1])>50) and self.isProtected :
+				self.stop()
 
 	def setKp(self,value):
 		#self.pitchPID.KpS=value
