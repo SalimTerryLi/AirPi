@@ -4,19 +4,34 @@ import math
 import sh
 import mc
 
+class INET_err_Out():
+	import socket
+	socket=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+	addr=("",0)
+	def __init__(self,addr,port):
+		self.addr=(addr,port)
+	def send(self,data):
+		self.socket.sendto(str(data)+"\n",self.addr)
+
 class PID_Attitude():
-	KpI=50
-	KiI=5
-	KdI=50
-	KpO=0.1
-	KiO=0.001
+	KpI=0
+	KiI=0
+	KdI=0
+	KpO=0
+	KiO=0
+	KdO=0
 	KpS=0
 	KiS=0
 	KdS=0
 
+	errorIRange=10
+	errorORange=10
+
 	errorSumRangeO=30
 	errorSumRangeI=3
 	errorSumRangeS=20
+
+	PID_P_Range=100
 
 	errorSumO=0
 	errorSumI=0
@@ -25,38 +40,57 @@ class PID_Attitude():
 	lastGyro=0
 	errorAngleLast=0
 
+	dbg=INET_err_Out("192.168.1.125",726)
+
 	def PID_Gyro(self,aimd,current):
 		errorI = aimd - current
 		PID_I_P = self.KpI * errorI
-		self.errorSumI = self.errorSumI + errorI
+		if errorI > self.errorIRange :
+			self.errorSumI = self.errorSumI + self.errorIRange
+		elif errorI < -self.errorIRange :
+			self.errorSumI = self.errorSumI - self.errorIRange
+		else :
+			self.errorSumI = self.errorSumI + errorI			
 		if self.errorSumI > self.errorSumRangeI :
 			self.errorSumI = self.errorSumRangeI
-		if self.errorSumI < -self.errorSumRangeI :
+		elif self.errorSumI < -self.errorSumRangeI :
 			self.errorSumI = -self.errorSumRangeI
 		PID_I_I = self.KiI * self.errorSumI
 		gyrodelta = errorI - self.errorGyroLast
 		self.errorGyroLast = errorI
 		PID_I_D = self.KdI * gyrodelta
 		PID_I = PID_I_P + PID_I_I + PID_I_D
-		#PID_I valued from [0,2000]
 		return PID_I
 
 	def PID_Rotation(self,aimd,current):
 		errorO = aimd - current
 		PID_O_P = self.KpO * errorO
-		self.errorSumO = self.errorSumO + errorO
+		if errorO > self.errorORange :
+			self.errorSumO = self.errorSumO + self.errorORange
+		elif errorO < -self.errorORange :
+			self.errorSumO = self.errorSumO - self.errorORange
+		else :
+			self.errorSumO = self.errorSumO + errorO
 		if self.errorSumO > self.errorSumRangeO :
 			self.errorSumO = self.errorSumRangeO
-		if self.errorSumO < -self.errorSumRangeO :
+		elif self.errorSumO < -self.errorSumRangeO :
 			self.errorSumO = -self.errorSumRangeO
 		PID_O_I = self.KiO * self.errorSumO
-		PID_O = PID_O_P + PID_O_I
+		angledelta = errorO - self.errorAngleLast
+		self.errorAngleLast = errorO
+		PID_O_D = self.KdO * angledelta
+		PID_O = PID_O_P + PID_O_I +PID_O_D
 
 		return PID_O
 
 	def PID_Single(self,aimd,current,gyro,dt):
 		errorS = aimd - current
-		PID_S_P = 1.0 * self.KpS * errorS
+		PID_S_P = self.KpS * errorS
+		if PID_S_P > self.PID_P_Range :
+			PID_S_P = self.PID_P_Range
+		if PID_S_P < -self.PID_P_Range :
+			PID_S_P = -self.PID_P_Range
+		self.dbg.send(PID_S_P)
 		self.errorSumS = self.errorSumS + errorS
 		if self.errorSumS > self.errorSumRangeS :
 			self.errorSumS = self.errorSumRangeS
@@ -177,21 +211,25 @@ class FlightCalculator():
 			
 			output=[0,0,0,0]
 			
-			#pitchgyro = self.pitchPID.PID_Rotation(self.aimdRotation[0],self.sensor.getRotation()[0])
-			#pitchmotorvalue = self.pitchPID.PID_Gyro(pitchgyro,self.sensor.getGyro()[0])
-			pitchmotorvalue = self.pitchPID.PID_Single(self.aimdRotation[0],self.sensor.getRotation()[0],self.sensor.getGyro()[0],dt)
+			pitchgyro = self.pitchPID.PID_Rotation(self.aimdRotation[0],self.sensor.getRotation()[0])
+			pitchmotorvalue = self.pitchPID.PID_Gyro(pitchgyro,self.sensor.getGyro()[0])
+			#pitchmotorvalue = self.pitchPID.PID_Gyro(self.aimdRotation[0],self.sensor.getGyro()[0])#Debugging for gyroPID
+			#pitchmotorvalue = self.pitchPID.PID_Single(self.aimdRotation[0],self.sensor.getRotation()[0],self.sensor.getGyro()[0],dt)
 			output[0]=output[0]+int(pitchmotorvalue)
 			output[1]=output[1]+int(pitchmotorvalue)
 			output[2]=output[2]-int(pitchmotorvalue)
 			output[3]=output[3]-int(pitchmotorvalue)
 
-			#rollgyro = self.rollPID.PID_Rotation(self.aimdRotation[1],self.sensor.getRotation()[1])
-			#rollmotorvalue = self.rollPID.PID_Gyro(rollgyro,self.sensor.getGyro()[1])
-			rollmotorvalue = self.rollPID.PID_Single(self.aimdRotation[1],self.sensor.getRotation()[1],self.sensor.getRotation()[1],dt)
+			rollgyro = self.rollPID.PID_Rotation(self.aimdRotation[1],self.sensor.getRotation()[1])
+			rollmotorvalue = self.rollPID.PID_Gyro(rollgyro,self.sensor.getGyro()[1])
+			#rollmotorvalue = self.rollPID.PID_Gyro(self.aimdRotation[1],self.sensor.getGyro()[1])#Debugging for gyroPID
+			#rollmotorvalue = self.rollPID.PID_Single(self.aimdRotation[1],self.sensor.getRotation()[1],self.sensor.getRotation()[1],dt)
 			output[0]=output[0]-int(rollmotorvalue)
 			output[1]=output[1]+int(rollmotorvalue)
 			output[2]=output[2]+int(rollmotorvalue)
 			output[3]=output[3]-int(rollmotorvalue)
+
+			#Codes below are not in confortable reading sense. Needing recoding.
 
 			if self.isBasePowerCTL :
 				for i in range(0,4):
@@ -228,3 +266,6 @@ class FlightCalculator():
 	def setKd(self,value):
 		#self.pitchPID.KdS=value
 		self.rollPID.KdS=value
+	def setPR(self,value):
+		self.rollPID.PID_P_Range=value
+
