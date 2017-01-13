@@ -62,7 +62,7 @@ class PID_Attitude():
 		PID_I = PID_I_P + PID_I_I + PID_I_D
 		return PID_I
 
-	def PID_Rotation(self,aimd,current):
+	def PID_Rotation(self,aimd,current,gyro,dt):
 		errorO = aimd - current
 		PID_O_P = self.KpO * errorO
 		if errorO > self.errorORange :
@@ -76,8 +76,9 @@ class PID_Attitude():
 		elif self.errorSumO < -self.errorSumRangeO :
 			self.errorSumO = -self.errorSumRangeO
 		PID_O_I = self.KiO * self.errorSumO
-		angledelta = errorO - self.errorAngleLast
-		self.errorAngleLast = errorO
+		#angledelta = errorO - self.errorAngleLast
+		#self.errorAngleLast = errorO
+		angledelta = gyro * dt
 		PID_O_D = self.KdO * angledelta
 		PID_O = PID_O_P + PID_O_I +PID_O_D
 
@@ -127,14 +128,15 @@ class FlightCalculator():
 	isInited=False
 	isRunning=False
 	isBasePowerCTL=True
-	isGPSEnabled=False
-	isSonarEnabled=False
-	isPressureEnabled=False
+	isGPSAltitudeEnabled=False
+	isSonarHeightEnabled=False
+	isPressureAltitudeEnabled=False
+	isGPSPositionEnabled=False
 	isAimdYawEnabled=False
 	isProtected=True
 
 	aimdRotation=[0,0,0]#[Pitch,Roll,Yaw]
-	aimdPosition=[0,0,0]
+	aimdPosition=[0,0,0]#[Longitude,Latitude,Altitude | Height]
 	aimdPowerBase=0
 	aimdPowerYaw=0
 
@@ -211,7 +213,7 @@ class FlightCalculator():
 			
 			output=[0,0,0,0]
 			
-			pitchgyro = self.pitchPID.PID_Rotation(self.aimdRotation[0],self.sensor.getRotation()[0])
+			pitchgyro = self.pitchPID.PID_Rotation(self.aimdRotation[0],self.sensor.getRotation()[0],self.sensor.getGyro()[0],dt)
 			pitchmotorvalue = self.pitchPID.PID_Gyro(pitchgyro,self.sensor.getGyro()[0])
 			#pitchmotorvalue = self.pitchPID.PID_Gyro(self.aimdRotation[0],self.sensor.getGyro()[0])#Debugging for gyroPID
 			#pitchmotorvalue = self.pitchPID.PID_Single(self.aimdRotation[0],self.sensor.getRotation()[0],self.sensor.getGyro()[0],dt)
@@ -220,7 +222,7 @@ class FlightCalculator():
 			output[2]=output[2]-int(pitchmotorvalue)
 			output[3]=output[3]-int(pitchmotorvalue)
 
-			rollgyro = self.rollPID.PID_Rotation(self.aimdRotation[1],self.sensor.getRotation()[1])
+			rollgyro = self.rollPID.PID_Rotation(self.aimdRotation[1],self.sensor.getRotation()[1],self.sensor.getGyro()[1],dt)
 			rollmotorvalue = self.rollPID.PID_Gyro(rollgyro,self.sensor.getGyro()[1])
 			#rollmotorvalue = self.rollPID.PID_Gyro(self.aimdRotation[1],self.sensor.getGyro()[1])#Debugging for gyroPID
 			#rollmotorvalue = self.rollPID.PID_Single(self.aimdRotation[1],self.sensor.getRotation()[1],self.sensor.getRotation()[1],dt)
@@ -251,8 +253,10 @@ class FlightCalculator():
 			
 			if timecost > 0.02 :
 				print("Tick Too Slowly!")
+				dt=timecost
 			else :
 				time.sleep(0.02 - timecost)
+				dt=0.02
 			
 			if (abs(self.sensor.getRotation()[0])>50) or (abs(self.sensor.getRotation()[1])>50) and self.isProtected :
 				self.stop()
